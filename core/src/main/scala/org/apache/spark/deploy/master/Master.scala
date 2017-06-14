@@ -140,6 +140,10 @@ private[spark] class Master(
     context.system.eventStream.subscribe(self, classOf[RemotingLifecycleEvent])
     webUi.bind()
     masterWebUiUrl = "http://" + masterPublicAddress + ":" + webUi.boundPort
+
+    /**
+      * 3.作业调度,定期去监测Work是否超时
+      */
     context.system.scheduler.schedule(0 millis, WORKER_TIMEOUT millis, self, CheckForWorkerTimeOut)
 
     masterMetricsSystem.registerSource(masterSource)
@@ -224,6 +228,9 @@ private[spark] class Master(
       System.exit(0)
     }
 
+    /**
+      * 匹配Worker发过来的注册信息
+      */
     case RegisterWorker(id, workerHost, workerPort, cores, memory, workerUiPort, publicAddress) =>
     {
       logInfo("Registering worker %s:%d with %d cores, %s RAM".format(
@@ -233,10 +240,17 @@ private[spark] class Master(
       } else if (idToWorker.contains(id)) {
         sender ! RegisterWorkerFailed("Duplicate worker ID")
       } else {
+        /**
+          * 封装worker的信息==
+          */
         val worker = new WorkerInfo(id, workerHost, workerPort, cores, memory,
           sender, workerUiPort, publicAddress)
         if (registerWorker(worker)) {
           persistenceEngine.addWorker(worker)
+
+          /**
+            * 向发送者(worker)回注册成功的消息===
+            */
           sender ! RegisteredWorker(masterUrl, masterWebUiUrl)
           schedule()
         } else {
@@ -371,6 +385,9 @@ private[spark] class Master(
 
     case Heartbeat(workerId) => {
       idToWorker.get(workerId) match {
+        /**
+          * 接收到worker的心跳信息后如果该worker在已经注册的列表中则更新他的上次心跳时间为当前时间,否则向worker发送重连指令
+          */
         case Some(workerInfo) =>
           workerInfo.lastHeartbeat = System.currentTimeMillis()
         case None =>
@@ -803,7 +820,14 @@ private[spark] class Master(
   def timeOutDeadWorkers() {
     // Copy the workers into an array so we don't modify the hashset while iterating through it
     val currentTime = System.currentTimeMillis()
+    /**
+      *过滤出当前时间-超时时间大于上次心跳时间的Worker节点(即超时的节点)===
+      */
     val toRemove = workers.filter(_.lastHeartbeat < currentTime - WORKER_TIMEOUT).toArray
+
+    /**
+      * 移除节点===
+      */
     for (worker <- toRemove) {
       if (worker.state != WorkerState.DEAD) {
         logWarning("Removing %s because we got no heartbeat in %d seconds".format(
@@ -866,6 +890,9 @@ private[spark] object Master extends Logging {
     SignalLogger.register(log)
     val conf = new SparkConf
     val args = new MasterArguments(argStrings, conf)
+    /**
+      * 1.获取actorSystem并启动Worker====
+      */
     val (actorSystem, _, _, _) = startSystemAndActor(args.host, args.port, args.webUiPort, conf)
     actorSystem.awaitTermination()
   }
@@ -905,6 +932,9 @@ private[spark] object Master extends Logging {
     val securityMgr = new SecurityManager(conf)
     val (actorSystem, boundPort) = AkkaUtils.createActorSystem(systemName, host, port, conf = conf,
       securityManager = securityMgr)
+    /**
+      * 2.启动Master:会先调用Master的主构造器再调用preStart方法====
+      */
     val actor = actorSystem.actorOf(
       Props(classOf[Master], host, boundPort, webUiPort, securityMgr, conf), actorName)
     val timeout = AkkaUtils.askTimeout(conf)

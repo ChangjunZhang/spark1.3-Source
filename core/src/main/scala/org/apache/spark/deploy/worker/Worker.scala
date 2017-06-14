@@ -167,6 +167,10 @@ private[spark] class Worker(
     shuffleService.startIfEnabled()
     webUi = new WorkerWebUI(this, workDir, webUiPort)
     webUi.bind()
+
+    /**
+      * 向Master注册
+      */
     registerWithMaster()
 
     metricsSystem.registerSource(workerSource)
@@ -191,7 +195,14 @@ private[spark] class Worker(
   private def tryRegisterAllMasters() {
     for (masterAkkaUrl <- masterAkkaUrls) {
       logInfo("Connecting to master " + masterAkkaUrl + "...")
+
+      /**
+        * 获取Master
+        */
       val actor = context.actorSelection(masterAkkaUrl)
+      /**
+        * 向Master发送注册消息
+        */
       actor ! RegisterWorker(workerId, host, port, cores, memory, webUi.boundPort, publicAddress)
     }
   }
@@ -274,7 +285,15 @@ private[spark] class Worker(
     case RegisteredWorker(masterUrl, masterWebUiUrl) =>
       logInfo("Successfully registered with master " + masterUrl)
       registered = true
+
+      /**
+        * 注册成功后将现在已连接的master修改为返回消息的master====
+        */
       changeMaster(masterUrl, masterWebUiUrl)
+
+      /**
+        * 启动任务调度,定时给自己发送心跳消息=====,自己匹配后再发给master
+        */
       context.system.scheduler.schedule(0 millis, HEARTBEAT_MILLIS millis, self, SendHeartbeat)
       if (CLEANUP_ENABLED) {
         logInfo(s"Worker cleanup enabled; old application directories will be deleted in: $workDir")
@@ -282,6 +301,9 @@ private[spark] class Worker(
           CLEANUP_INTERVAL_MILLIS millis, self, WorkDirCleanup)
       }
 
+    /**
+      * 匹配为心跳消息,如果仍在连接中,向master发送心跳信息====
+      */
     case SendHeartbeat =>
       if (connected) { master ! Heartbeat(workerId) }
 
@@ -327,6 +349,9 @@ private[spark] class Worker(
         System.exit(1)
       }
 
+    /**
+      * 接收到的是重连的指令,重新向master注册
+      */
     case ReconnectWorker(masterUrl) =>
       logInfo(s"Master with url $masterUrl requested this worker to reconnect.")
       registerWithMaster()
@@ -526,6 +551,9 @@ private[spark] object Worker extends Logging {
     SignalLogger.register(log)
     val conf = new SparkConf
     val args = new WorkerArguments(argStrings, conf)
+    /**
+      * 获取actionSystem并启动Worker
+      */
     val (actorSystem, _) = startSystemAndActor(args.host, args.port, args.webUiPort, args.cores,
       args.memory, args.masters, args.workDir)
     actorSystem.awaitTermination()
@@ -549,6 +577,10 @@ private[spark] object Worker extends Logging {
     val (actorSystem, boundPort) = AkkaUtils.createActorSystem(systemName, host, port,
       conf = conf, securityManager = securityMgr)
     val masterAkkaUrls = masterUrls.map(Master.toAkkaUrl(_, AkkaUtils.protocol(actorSystem)))
+
+    /**
+      * 启动Worker并调用Worker的主构造方法和preStart方法
+      */
     actorSystem.actorOf(Props(classOf[Worker], host, boundPort, webUiPort, cores, memory,
       masterAkkaUrls, systemName, actorName,  workDir, conf, securityMgr), name = actorName)
     (actorSystem, boundPort)
