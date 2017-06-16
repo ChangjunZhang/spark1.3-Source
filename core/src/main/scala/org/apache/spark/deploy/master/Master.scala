@@ -325,16 +325,34 @@ private[spark] class Master(
       }
     }
 
+    /**
+      * 匹配ClientActor发送过来的注册应用的消息
+      */
     case RegisterApplication(description) => {
       if (state == RecoveryState.STANDBY) {
         // ignore, don't send response
       } else {
         logInfo("Registering app " + description.name)
+        /**
+          * 封装App信息，并把应用信息放到内存中存储
+          */
         val app = createApplication(description, sender)
         registerApplication(app)
         logInfo("Registered app " + description.name + " with ID " + app.id)
+
+        /**
+          * 利用持久化引擎，持久化该APP信息
+          */
         persistenceEngine.addApplication(app)
+
+        /**
+          * 向clientActor发送注册成功的消息
+          */
         sender ! RegisteredApplication(app.id, masterUrl)
+
+        /**
+          * 重要：Master启动调度器调度资源，其实就是把任务启动到那些Worker上
+          */
         schedule()
       }
     }
@@ -569,13 +587,27 @@ private[spark] class Master(
       }
     }
 
+
     // Right now this is a very simple FIFO scheduler. We keep trying to fit in the first app
     // in the queue, then the second app, etc.
+    /**
+      * 下面是两种调度方式，一种是尽量打散，一种尽量集中
+      */
     if (spreadOutApps) {
       // Try to spread out each app among all the nodes, until it has all its cores
+      /**
+        * 遍历等待的应用列表中的剩余执行核数大于0的App
+        */
       for (app <- waitingApps if app.coresLeft > 0) {
+        /**
+          * 过滤出可以使用的Worker节点（首先状态是ALIVE，然后canUse(worker节点剩余的内存大于等于app指定的每个节点运行的内存大小，
+          * 并且该worker上没有Executor在运行该应用)，然后根据可用的资源大小，从大到小排序）
+          */
         val usableWorkers = workers.toArray.filter(_.state == WorkerState.ALIVE)
           .filter(canUse(app, _)).sortBy(_.coresFree).reverse
+        /**
+          * 可用的节点数量
+          */
         val numUsable = usableWorkers.length
         val assigned = new Array[Int](numUsable) // Number of cores to give on each node
         var toAssign = math.min(app.coresLeft, usableWorkers.map(_.coresFree).sum)
@@ -591,6 +623,10 @@ private[spark] class Master(
         for (pos <- 0 until numUsable) {
           if (assigned(pos) > 0) {
             val exec = app.addExecutor(usableWorkers(pos), assigned(pos))
+
+            /**
+              * 启动Executor（Master发送消息让Worker启动Executor）
+              */
             launchExecutor(usableWorkers(pos), exec)
             app.state = ApplicationState.RUNNING
           }
@@ -613,11 +649,28 @@ private[spark] class Master(
     }
   }
 
+  /**
+    * 向worker发送消息，让worker启动Executor
+    * @param worker
+    * @param exec
+    */
   def launchExecutor(worker: WorkerInfo, exec: ExecutorDesc) {
     logInfo("Launching executor " + exec.fullId + " on worker " + worker.id)
+
+    /**
+      * 记录该Worker使用的资源
+      */
     worker.addExecutor(exec)
+
+    /**
+      * Master发送消息给worker，把参数通过case Class传递参数给worker，让它启动Executor
+      */
     worker.actor ! LaunchExecutor(masterUrl,
       exec.application.id, exec.id, exec.application.desc, exec.cores, exec.memory)
+
+    /**
+      * Master向clientActor发送消息，告诉它Executor已经启动了
+      */
     exec.application.driver ! ExecutorAdded(
       exec.id, worker.id, worker.hostPort, exec.cores, exec.memory)
   }

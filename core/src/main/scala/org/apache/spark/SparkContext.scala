@@ -65,6 +65,15 @@ import org.apache.spark.ui.jobs.JobProgressListener
 import org.apache.spark.util._
 
 /**
+  * ==================================================================
+  * 很重要：SparkContext是Spark提交任务到集群的入口
+  * 1.SparkEnv,里面有一个非常重要的对象ActorSystem
+  * 2.创建TaskScheduler，根据提交任务的URL进行匹配->创建TaskSchedulerImpl->创建SparkDeploySchedulerBackend
+  * （里面有两个actor,一个clientActor与Master通信，一个driverActor与Executor通信）
+  * 3.创建DAGScheduler
+  * 4.调用taskScheduler的start方法
+  * ================================================================
+  *
  * Main entry point for Spark functionality. A SparkContext represents the connection to a Spark
  * cluster, and can be used to create RDDs, accumulators and broadcast variables on that cluster.
  *
@@ -262,10 +271,20 @@ class SparkContext(config: SparkConf) extends Logging with ExecutorAllocationCli
   // Create the Spark execution environment (cache, map output tracker, etc)
 
   // This function allows components created by SparkEnv to be mocked in unit tests:
+  /**
+    * 创建SparkEnv====该方法创建了一个ActorSystem
+    * @param conf
+    * @param isLocal
+    * @param listenerBus
+    * @return
+    */
   private[spark] def createSparkEnv(
       conf: SparkConf,
       isLocal: Boolean,
       listenerBus: LiveListenerBus): SparkEnv = {
+    /**
+      * 调用SparkEnv的DriverEnv
+      */
     SparkEnv.createDriverEnv(conf, isLocal, listenerBus)
   }
 
@@ -358,13 +377,22 @@ class SparkContext(config: SparkConf) extends Logging with ExecutorAllocationCli
   val sparkUser = Utils.getCurrentUserName()
   executorEnvs("SPARK_USER") = sparkUser
 
+  /**
+    * 根据master创建TaskScheduler
+    */
   // Create and start the scheduler
   private[spark] var (schedulerBackend, taskScheduler) =
     SparkContext.createTaskScheduler(this, master)
+  /**
+    * 通过ActorSystem创建一个Actor，这个心跳是Executor和DriverActor的心跳
+    */
   private val heartbeatReceiver = env.actorSystem.actorOf(
     Props(new HeartbeatReceiver(taskScheduler)), "HeartbeatReceiver")
   @volatile private[spark] var dagScheduler: DAGScheduler = _
   try {
+    /**
+      * 创建了一个DAGScheduler，用来把DAG切分为Stage
+      */
     dagScheduler = new DAGScheduler(this)
   } catch {
     case e: Exception => {
@@ -378,6 +406,10 @@ class SparkContext(config: SparkConf) extends Logging with ExecutorAllocationCli
 
   // start TaskScheduler after taskScheduler sets DAGScheduler reference in DAGScheduler's
   // constructor
+  /**
+    * 调用taskScheduler的start方法
+    * 最主要的逻辑都在这个方法中=====
+    */
   taskScheduler.start()
 
   val applicationId: String = taskScheduler.applicationId()
@@ -2082,6 +2114,8 @@ object SparkContext extends Logging {
   }
 
   /**
+    * 根据给定的master URL创建task Scheduler
+    * 返回一个(scheduler backend , task scheduler.)
    * Create a task scheduler based on a given master URL.
    * Return a 2-tuple of the scheduler backend and the task scheduler.
    */
@@ -2104,6 +2138,9 @@ object SparkContext extends Logging {
     // When running locally, don't try to re-execute tasks on failure.
     val MAX_LOCAL_TASK_FAILURES = 1
 
+    /**
+      * 根据master对不同的模式进行正则匹配
+      */
     master match {
       case "local" =>
         val scheduler = new TaskSchedulerImpl(sc, MAX_LOCAL_TASK_FAILURES, isLocal = true)
@@ -2133,10 +2170,24 @@ object SparkContext extends Logging {
         scheduler.initialize(backend)
         (backend, scheduler)
 
+      /**
+        * standAlone模式
+        */
       case SPARK_REGEX(sparkUrl) =>
+
+        /**
+          * 首先创建一个TaskSchedulerImpl
+          */
         val scheduler = new TaskSchedulerImpl(sc)
         val masterUrls = sparkUrl.split(",").map("spark://" + _)
+        /**
+          * 创建SchedulerBackend传入taskScheduler,sc和masterUrls
+          */
         val backend = new SparkDeploySchedulerBackend(scheduler, sc, masterUrls)
+
+        /**
+          * 调用scheduler的initialize方法并传入backend，创建调度器
+          */
         scheduler.initialize(backend)
         (backend, scheduler)
 

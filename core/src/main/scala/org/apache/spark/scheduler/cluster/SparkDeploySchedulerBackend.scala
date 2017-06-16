@@ -43,8 +43,14 @@ private[spark] class SparkDeploySchedulerBackend(
   val totalExpectedCores = maxCores.getOrElse(0)
 
   override def start() {
+    /**
+      * 调用父类的start方法,其中创建driverActor===
+      */
     super.start()
 
+    /**
+      * 准备一些参数，以后把这些参数封装到一个对象中，然后将该对象发送给Master
+      */
     // The endpoint for executors to talk to us
     val driverUrl = AkkaUtils.address(
       AkkaUtils.protocol(actorSystem),
@@ -79,13 +85,27 @@ private[spark] class SparkDeploySchedulerBackend(
     // Start executors with a few necessary configs for registering with the scheduler
     val sparkJavaOpts = Utils.sparkJavaOpts(conf, SparkConf.isExecutorStartupConf)
     val javaOpts = sparkJavaOpts ++ extraJavaOpts
+    /**
+      * 重要：这个参数是Executor的实现类
+      * 封装启动Executor的命令与参数
+      */
     val command = Command("org.apache.spark.executor.CoarseGrainedExecutorBackend",
       args, sc.executorEnvs, classPathEntries ++ testingClassPath, libraryPathEntries, javaOpts)
     val appUIAddress = sc.ui.map(_.appUIAddress).getOrElse("")
+    /**
+      * 封装App的一些参数信息并且传递Executor的信息
+      */
     val appDesc = new ApplicationDescription(sc.appName, maxCores, sc.executorMemory, command,
       appUIAddress, sc.eventLogDir, sc.eventLogCodec)
 
+    /**
+      * 创建一个APPClient，并将appDesc传入APPClient
+      */
     client = new AppClient(sc.env.actorSystem, masters, appDesc, this, conf)
+
+    /**
+      * 调用start方法，在该方法中创建了clientActor,其中的preStart方法会registerWithMaster
+      */
     client.start()
 
     waitForRegistration()

@@ -106,6 +106,10 @@ object SparkSubmit {
     if (appArgs.verbose) {
       printStream.println(appArgs)
     }
+
+    /**
+      * 根据不同的命令执行不同的方法
+      */
     appArgs.action match {
       case SparkSubmitAction.SUBMIT => submit(appArgs)
       case SparkSubmitAction.KILL => kill(appArgs)
@@ -130,7 +134,9 @@ object SparkSubmit {
 
   /**
    * Submit the application using the provided parameters.
-   *
+   * 使用提供的参数提交任务==
+    * 分两步执行:1.准备环境
+    * 2.根据启动环境反射执行用户传入的子main方法
    * This runs in two steps. First, we prepare the launch environment by setting up
    * the appropriate classpath, system properties, and application arguments for
    * running the child main class based on the cluster manager and the deploy mode.
@@ -496,7 +502,7 @@ object SparkSubmit {
 
   /**
    * Run the main method of the child class using the provided launch environment.
-   *
+   * 执行子Main方法====
    * Note that this main class will not be the one provided by the user if we're
    * running cluster deploy mode or python applications.
    */
@@ -551,6 +557,9 @@ object SparkSubmit {
       printWarning("Subclasses of scala.App may not work correctly. Use a main() method instead.")
     }
 
+    /**
+      * 获取Main方法
+      */
     val mainMethod = mainClass.getMethod("main", new Array[String](0).getClass)
     if (!Modifier.isStatic(mainMethod.getModifiers)) {
       throw new IllegalStateException("The main method in the given main class must be static")

@@ -52,6 +52,10 @@ private[spark] object AkkaUtils extends Logging {
       conf: SparkConf,
       securityManager: SecurityManager): (ActorSystem, Int) = {
     val startService: Int => (ActorSystem, Int) = { actualPort =>
+
+      /**
+        * 调用真正创建ActionSystem的方法
+        */
       doCreateActorSystem(name, host, actualPort, conf, securityManager)
     }
     Utils.startServiceOnPort(port, startService, conf, name)
@@ -119,6 +123,9 @@ private[spark] object AkkaUtils extends Logging {
       |akka.log-dead-letters-during-shutdown = $lifecycleEvents
       """.stripMargin))
 
+    /**
+      * 根据给定的参数创建actorSystem
+      */
     val actorSystem = ActorSystem(name, akkaConf)
     val provider = actorSystem.asInstanceOf[ExtendedActorSystem].provider
     val boundPort = provider.getDefaultAddress.port.get

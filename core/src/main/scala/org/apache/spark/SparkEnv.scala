@@ -160,6 +160,10 @@ object SparkEnv extends Logging {
     assert(conf.contains("spark.driver.port"), "spark.driver.port is not set on the driver!")
     val hostname = conf.get("spark.driver.host")
     val port = conf.get("spark.driver.port").toInt
+
+    /**
+      * 创建Driver的Env
+      */
     create(
       conf,
       SparkContext.DRIVER_IDENTIFIER,
@@ -197,6 +201,7 @@ object SparkEnv extends Logging {
   }
 
   /**
+    * 创建Driver或者Executor的Env
    * Helper method to create a SparkEnv for a driver or an executor.
    */
   private def create(
@@ -220,6 +225,10 @@ object SparkEnv extends Logging {
     // Create the ActorSystem for Akka and get the port it binds to.
     val (actorSystem, boundPort) = {
       val actorSystemName = if (isDriver) driverActorSystemName else executorActorSystemName
+
+      /**
+        * 利用AkkaUtils创建ActorSystem=======
+        */
       AkkaUtils.createActorSystem(actorSystemName, hostname, port, conf, securityManager)
     }
 

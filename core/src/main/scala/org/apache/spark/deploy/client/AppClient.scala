@@ -67,6 +67,9 @@ private[spark] class AppClient(
     override def preStart() {
       context.system.eventStream.subscribe(self, classOf[RemotingLifecycleEvent])
       try {
+        /**
+          * 调用registerWithMaster,向master注册
+          */
         registerWithMaster()
       } catch {
         case e: Exception =>
@@ -80,11 +83,21 @@ private[spark] class AppClient(
       for (masterAkkaUrl <- masterAkkaUrls) {
         logInfo("Connecting to master " + masterAkkaUrl + "...")
         val actor = context.actorSelection(masterAkkaUrl)
+
+        /**
+          * 与每个Master进行通信,发送RegisterApplication的消息（所有参数已封装到appDescription），如果是StandBy的Master不会回消息
+          */
         actor ! RegisterApplication(appDescription)
       }
     }
 
+    /**
+      * 向master注册
+      */
     def registerWithMaster() {
+      /**
+        * tryRegisterAllMasters
+        */
       tryRegisterAllMasters()
       import context.dispatcher
       var retries = 0
@@ -117,16 +130,26 @@ private[spark] class AppClient(
     }
 
     override def receiveWithLogging = {
+      /**
+        * 向Master注册成功后返回的消息
+        */
       case RegisteredApplication(appId_, masterUrl) =>
         appId = appId_
         registered = true
         changeMaster(masterUrl)
+
+        /**
+          * 调用listener实现类(如SparkDeploySchedulerBackend)的connected
+          */
         listener.connected(appId)
 
       case ApplicationRemoved(message) =>
         markDead("Master removed our application: %s".format(message))
         context.stop(self)
 
+      /**
+        * 匹配Master发送过来的消息，告诉ClientActor已经向Worker发送了启动Executor的消息
+        */
       case ExecutorAdded(id: Int, workerId: String, hostPort: String, cores: Int, memory: Int) =>
         val fullId = appId + "/" + id
         logInfo("Executor added: %s on %s (%s) with %d cores".format(fullId, workerId, hostPort,
@@ -186,6 +209,10 @@ private[spark] class AppClient(
 
   def start() {
     // Just launch an actor; it will call back into the listener.
+    /**
+      * 创建clientActor,会调用主构造器和生命周期（preStart）方法
+      * preStart方法中调用registerWithMaster
+      */
     actor = actorSystem.actorOf(Props(new ClientActor))
   }
 
