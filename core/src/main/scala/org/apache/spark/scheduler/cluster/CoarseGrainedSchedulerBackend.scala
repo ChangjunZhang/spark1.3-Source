@@ -91,7 +91,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val actorSyste
 
     def receiveWithLogging = {
       /**
-        * Executor向Driver发送的消息匹配
+        * Executor向Driver发送的消息匹配，来注册Executor
         */
       case RegisterExecutor(executorId, hostPort, cores, logUrls) =>
         Utils.checkHostPort(hostPort, "Host port expected " + hostPort)
@@ -99,6 +99,10 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val actorSyste
           sender ! RegisterExecutorFailed("Duplicate executor ID: " + executorId)
         } else {
           logInfo("Registered executor: " + sender + " with ID " + executorId)
+
+          /**
+            * 给Executor回消息，告诉他已经注册成功
+            */
           sender ! RegisteredExecutor
 
           addressToExecutorId(sender.path.address) = executorId
@@ -117,6 +121,10 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val actorSyste
           }
           listenerBus.post(
             SparkListenerExecutorAdded(System.currentTimeMillis(), executorId, data))
+
+          /**
+            * 重要：：：：查看是否有任务需要提交（DriverActor ->Executor)
+            */
           makeOffers()
         }
 

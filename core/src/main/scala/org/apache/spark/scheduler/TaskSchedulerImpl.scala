@@ -120,6 +120,10 @@ private[spark] class TaskSchedulerImpl(
     this.dagScheduler = dagScheduler
   }
 
+  /**
+    *
+    * @param backend(standAlone模式为SparkDeploySchedulerBackend)
+    */
   def initialize(backend: SchedulerBackend) {
     this.backend = backend
     // temporarily set rootPool name to empty

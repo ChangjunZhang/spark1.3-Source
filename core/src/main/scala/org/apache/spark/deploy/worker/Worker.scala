@@ -357,7 +357,7 @@ private[spark] class Worker(
       registerWithMaster()
 
     /**
-      * 接收Master传过来的启动Executor的消息
+      * 接收Master传过来的启动Executor的消息,LaunchExecutor是一个CaseClass，里面封装了要启动Executor的信息
       */
     case LaunchExecutor(masterUrl, appId, execId, appDesc, cores_, memory_) =>
       if (masterUrl != activeMasterUrl) {
@@ -381,6 +381,9 @@ private[spark] class Worker(
             }.toSeq
           }
           appDirectories(appId) = appLocalDirs
+          /**
+            * 创建ExecutorRunner，将参数都放到其中，然后通过它启动Executor
+            */
           val manager = new ExecutorRunner(
             appId,
             execId,
@@ -397,7 +400,15 @@ private[spark] class Worker(
             akkaUrl,
             conf,
             appLocalDirs, ExecutorState.LOADING)
+
+          /**
+            * 将ExecutorRunner放入map（executors）中key为ExecutorID
+            */
           executors(appId + "/" + execId) = manager
+
+          /**
+            * 调用ExecutorRunner的start方法来启动Executor java子进程
+            */
           manager.start()
           coresUsed += cores_
           memoryUsed += memory_
@@ -415,6 +426,9 @@ private[spark] class Worker(
         }
       }
 
+    /**
+      * 接收Executor发过来的消息，证明Executor已经启动成功
+      */
     case ExecutorStateChanged(appId, execId, state, message, exitStatus) =>
       master ! ExecutorStateChanged(appId, execId, state, message, exitStatus)
       val fullId = appId + "/" + execId

@@ -78,6 +78,9 @@ private[spark] class Executor(
     Thread.setDefaultUncaughtExceptionHandler(SparkUncaughtExceptionHandler)
   }
 
+  /**
+    * 初始化线程池
+    */
   // Start worker thread pool
   val threadPool = Utils.newDaemonCachedThreadPool("Executor task launch worker")
 
@@ -116,6 +119,9 @@ private[spark] class Executor(
   // Maintains the list of running tasks.
   private val runningTasks = new ConcurrentHashMap[Long, TaskRunner]
 
+  /**
+    * Executor向driverActor发送心跳
+    */
   startDriverHeartbeater()
 
   def launchTask(
@@ -422,6 +428,9 @@ private[spark] class Executor(
             }
           }
 
+          /**
+            * A heartbeat from executors to the driver.
+            */
           val message = Heartbeat(executorId, tasksMetrics.toArray, env.blockManager.blockManagerId)
           try {
             val response = AkkaUtils.askWithReply[HeartbeatResponse](message, heartbeatReceiverRef,

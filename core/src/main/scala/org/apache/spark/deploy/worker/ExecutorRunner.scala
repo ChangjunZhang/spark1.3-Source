@@ -64,9 +64,16 @@ private[spark] class ExecutorRunner(
   var shutdownHook: Thread = null
 
   def start() {
+    /**
+      * 先创建一个线程对象，通过一个线程来启动一个Java子进程
+      */
     workerThread = new Thread("ExecutorRunner for " + fullId) {
       override def run() { fetchAndRunExecutor() }
     }
+
+    /**
+      * 调用线程对象的start方法，线程对象的run方法
+      */
     workerThread.start()
     // Shutdown hook that kills actors on shutdown.
     shutdownHook = new Thread() {
@@ -125,9 +132,13 @@ private[spark] class ExecutorRunner(
 
   /**
    * Download and run the executor described in our ApplicationDescription
+    * 线程对象调用改方法启动java子进程
    */
   def fetchAndRunExecutor() {
     try {
+      /**
+        * 启动子进程
+        */
       // Launch the process
       val builder = CommandUtils.buildProcessBuilder(appDesc.command, memory,
         sparkHome.getAbsolutePath, substituteVariables)
@@ -146,6 +157,10 @@ private[spark] class ExecutorRunner(
       builder.environment.put("SPARK_LOG_URL_STDERR", s"${baseUrl}stderr")
       builder.environment.put("SPARK_LOG_URL_STDOUT", s"${baseUrl}stdout")
 
+      /**
+        *
+        * 真正的启动方法：启动一个Java子进程（command中的参数org.apache.spark.executor.CoarseGrainedExecutorBackend的main方法）
+        */
       process = builder.start()
       val header = "Spark Executor Command: %s\n%s\n\n".format(
         command.mkString("\"", "\" \"", "\""), "=" * 40)
@@ -163,6 +178,10 @@ private[spark] class ExecutorRunner(
       val exitCode = process.waitFor()
       state = ExecutorState.EXITED
       val message = "Command exited with code " + exitCode
+
+      /**
+        * 给Worker发消息告诉worker Executor已经启动成功
+        */
       worker ! ExecutorStateChanged(appId, execId, state, Some(message), Some(exitCode))
     } catch {
       case interrupted: InterruptedException => {

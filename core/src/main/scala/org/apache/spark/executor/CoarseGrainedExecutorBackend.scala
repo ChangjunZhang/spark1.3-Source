@@ -49,9 +49,20 @@ private[spark] class CoarseGrainedExecutorBackend(
   var executor: Executor = null
   var driver: ActorSelection = null
 
+  /**
+    * CoarseGrainedExecutorBackend的生命周期方法
+    */
   override def preStart() {
     logInfo("Connecting to driver: " + driverUrl)
+
+    /**
+      * 获取driverActor
+      */
     driver = context.actorSelection(driverUrl)
+
+    /**
+      * Executor向DriverActor发送RegisterExecutor消息，来注册Executor
+      */
     driver ! RegisterExecutor(executorId, hostPort, cores, extractLogUrls)
     context.system.eventStream.subscribe(self, classOf[RemotingLifecycleEvent])
   }
@@ -63,9 +74,16 @@ private[spark] class CoarseGrainedExecutorBackend(
   }
 
   override def receiveWithLogging = {
+    /**
+      * driverActor发送给Executor的消息，说明Executor已经注册成功
+      */
     case RegisteredExecutor =>
       logInfo("Successfully registered with driver")
       val (hostname, _) = Utils.parseHostPort(hostPort)
+
+      /**
+        * 创建了一个Executor实例，用来执行业务逻辑
+        */
       executor = new Executor(executorId, hostname, env, userClassPath, isLocal = false)
 
     case RegisterExecutorFailed(message) =>
@@ -132,12 +150,18 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
       // Bootstrap to fetch the driver's Spark properties.
       val executorConf = new SparkConf
       val port = executorConf.getInt("spark.executor.port", 0)
+      /**
+        * 在Executor里创建ActorSystem
+        */
       val (fetcher, _) = AkkaUtils.createActorSystem(
         "driverPropsFetcher",
         hostname,
         port,
         executorConf,
         new SecurityManager(executorConf))
+      /**
+        * 获得driverActor
+        */
       val driver = fetcher.actorSelection(driverUrl)
       val timeout = AkkaUtils.askTimeout(executorConf)
       val fut = Patterns.ask(driver, RetrieveSparkProps, timeout)
@@ -162,6 +186,9 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
       val boundPort = env.conf.getInt("spark.executor.port", 0)
       assert(boundPort != 0)
 
+      /**
+        * 启动CoarseGrainedExecutorBackend Actor
+        */
       // Start the CoarseGrainedExecutorBackend actor.
       val sparkHostPort = hostname + ":" + boundPort
       env.actorSystem.actorOf(
@@ -175,6 +202,10 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
     }
   }
 
+  /**
+    * Executor进程执行的入口
+    * @param args
+    */
   def main(args: Array[String]) {
     var driverUrl: String = null
     var executorId: String = null
@@ -221,6 +252,9 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
       printUsageAndExit()
     }
 
+    /**
+      * 调用run方法
+      */
     run(driverUrl, executorId, hostname, cores, appId, workerUrl, userClassPath)
   }
 

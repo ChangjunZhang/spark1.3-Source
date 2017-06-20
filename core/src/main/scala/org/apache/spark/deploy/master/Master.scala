@@ -357,6 +357,9 @@ private[spark] class Master(
       }
     }
 
+    /**
+      * worker发送给Master的消息，告诉Master，Executor已经启动
+      */
     case ExecutorStateChanged(appId, execId, state, message, exitStatus) => {
       val execOption = idToApp.get(appId).flatMap(app => app.executors.get(execId))
       execOption match {
