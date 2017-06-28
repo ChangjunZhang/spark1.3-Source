@@ -1495,6 +1495,10 @@ class SparkContext(config: SparkConf) extends Logging with ExecutorAllocationCli
     if (conf.getBoolean("spark.logLineage", false)) {
       logInfo("RDD's recursive dependencies:\n" + rdd.toDebugString)
     }
+
+    /**
+      * 传说中的DAGScheduler出现了，用于将DAG切分成Stage，然后再转换成TaskSet给TaskScheduler，再提交给Executor
+      */
     dagScheduler.runJob(rdd, cleanedFunc, partitions, callSite, allowLocal,
       resultHandler, localProperties.get)
     progressBar.foreach(_.finishAll())
@@ -1505,6 +1509,7 @@ class SparkContext(config: SparkConf) extends Logging with ExecutorAllocationCli
    * Run a function on a given set of partitions in an RDD and return the results as an array. The
    * allowLocal flag specifies whether the scheduler can run the computation on the driver rather
    * than shipping it out to the cluster, for short actions like first().
+    * final RDD
    */
   def runJob[T, U: ClassTag](
       rdd: RDD[T],
@@ -1513,6 +1518,10 @@ class SparkContext(config: SparkConf) extends Logging with ExecutorAllocationCli
       allowLocal: Boolean
       ): Array[U] = {
     val results = new Array[U](partitions.size)
+
+    /**
+      * 调用重载的runJob
+      */
     runJob[T, U](rdd, func, partitions, allowLocal, (index, res) => results(index) = res)
     results
   }
@@ -1532,6 +1541,7 @@ class SparkContext(config: SparkConf) extends Logging with ExecutorAllocationCli
 
   /**
    * Run a job on all partitions in an RDD and return the results in an array.
+    * 将最后一个RDD和一个函数传入到该方法中
    */
   def runJob[T, U: ClassTag](rdd: RDD[T], func: (TaskContext, Iterator[T]) => U): Array[U] = {
     runJob(rdd, func, 0 until rdd.partitions.size, false)

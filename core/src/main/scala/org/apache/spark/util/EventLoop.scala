@@ -40,11 +40,15 @@ private[spark] abstract class EventLoop[E](name: String) extends Logging {
   private val eventThread = new Thread(name) {
     setDaemon(true)
 
+    /**
+      * 调用它的run方法,从阻塞队列eventQueue中取出event（BlockingQueue的特性，有则取出，无则等待）
+      */
     override def run(): Unit = {
       try {
         while (!stopped.get) {
           val event = eventQueue.take()
           try {
+            //调用实现类DAGSchedulerEventProcessLoop的onReceive
             onReceive(event)
           } catch {
             case NonFatal(e) => {
@@ -70,6 +74,10 @@ private[spark] abstract class EventLoop[E](name: String) extends Logging {
     }
     // Call onStart before starting the event thread to make sure it happens before onReceive
     onStart()
+
+    /**
+      * 启动eventThread，调用它的run方法
+      */
     eventThread.start()
   }
 

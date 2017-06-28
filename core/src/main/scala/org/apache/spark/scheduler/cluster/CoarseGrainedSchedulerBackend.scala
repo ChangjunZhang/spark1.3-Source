@@ -141,7 +141,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val actorSyste
                 "from unknown executor $sender with ID $executorId")
           }
         }
-
+      //TODO 调用makeOffers向Executor提交Task
       case ReviveOffers =>
         makeOffers()
 
@@ -179,6 +179,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val actorSyste
 
     // Make fake resource offers on all executors
     def makeOffers() {
+      //TODO 调用launchTasks，向Executor提交Task
       launchTasks(scheduler.resourceOffers(executorDataMap.map { case (id, executorData) =>
         new WorkerOffer(id, executorData.executorHost, executorData.freeCores)
       }.toSeq))
@@ -194,7 +195,9 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val actorSyste
     // Launch tasks returned by a set of resource offers
     def launchTasks(tasks: Seq[Seq[TaskDescription]]) {
       for (task <- tasks.flatten) {
+        //首先拿到序列化器
         val ser = SparkEnv.get.closureSerializer.newInstance()
+        //序列化task
         val serializedTask = ser.serialize(task)
         if (serializedTask.limit >= akkaFrameSize - AkkaUtils.reservedSizeBytes) {
           val taskSetId = scheduler.taskIdToTaskSetId(task.taskId)
@@ -214,6 +217,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val actorSyste
         else {
           val executorData = executorDataMap(task.executorId)
           executorData.freeCores -= scheduler.CPUS_PER_TASK
+          //TODO 向Executor(CoarseGrainedExecutorBackend)发送序列化好的Task
           executorData.executorActor ! LaunchTask(new SerializableBuffer(serializedTask))
         }
       }

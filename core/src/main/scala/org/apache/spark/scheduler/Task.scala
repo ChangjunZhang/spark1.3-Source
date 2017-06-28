@@ -61,6 +61,7 @@ private[spark] abstract class Task[T](val stageId: Int, var partitionId: Int) ex
       kill(interruptThread = false)
     }
     try {
+      //TODO 执行真正的task（task分为两种：ResultTask和ShuffleMapTask）
       runTask(context)
     } finally {
       context.markTaskCompleted()

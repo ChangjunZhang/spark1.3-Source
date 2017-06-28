@@ -168,6 +168,10 @@ private[spark] class TaskSchedulerImpl(
     waitBackendReady()
   }
 
+  /**
+    * TODO 提交tasks
+    * @param taskSet
+    */
   override def submitTasks(taskSet: TaskSet) {
     val tasks = taskSet.tasks
     logInfo("Adding task set " + taskSet.id + " with " + tasks.length + " tasks")
@@ -191,6 +195,7 @@ private[spark] class TaskSchedulerImpl(
       }
       hasReceivedTask = true
     }
+    //TODO 向DriverActor发消息，接收DriverActor的任务
     backend.reviveOffers()
   }
 

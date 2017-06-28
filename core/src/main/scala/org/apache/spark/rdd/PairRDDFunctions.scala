@@ -935,6 +935,9 @@ class PairRDDFunctions[K, V](self: RDD[(K, V)])
     // Doesn't work in Scala 2.9 due to what may be a generics bug
     // TODO: Should we uncomment this for Scala 2.10?
     // conf.setOutputFormat(outputFormatClass)
+    /**
+      * 准备一些HDFS的参数
+      */
     hadoopConf.set("mapred.output.format.class", outputFormatClass.getName)
     for (c <- codec) {
       hadoopConf.setCompressMapOutput(true)
@@ -951,6 +954,10 @@ class PairRDDFunctions[K, V](self: RDD[(K, V)])
 
     FileOutputFormat.setOutputPath(hadoopConf,
       SparkHadoopWriter.createPathFromString(path, hadoopConf))
+
+    /**
+      * saveAsHadoopDataset
+      */
     saveAsHadoopDataset(hadoopConf)
   }
 
@@ -1053,9 +1060,15 @@ class PairRDDFunctions[K, V](self: RDD[(K, V)])
       hadoopConf.getOutputFormat.checkOutputSpecs(ignoredFs, hadoopConf)
     }
 
+    /**
+      * 创建一个HDFS的流
+      */
     val writer = new SparkHadoopWriter(hadoopConf)
     writer.preSetup()
 
+    /**
+      * 这是一个函数，Iterator把一个分区的数据写入HDFS
+      */
     val writeToFile = (context: TaskContext, iter: Iterator[(K, V)]) => {
       val config = wrappedConf.value
       // Hadoop wants a 32-bit task attempt ID, so if ours is bigger than Int.MaxValue, roll it
@@ -1084,6 +1097,9 @@ class PairRDDFunctions[K, V](self: RDD[(K, V)])
       outputMetrics.setRecordsWritten(recordsWritten)
     }
 
+    /**
+      * 开始提交任务，self是DAG中的最后一个RDD，这个RDD通过依赖关系进行切分stage
+      */
     self.context.runJob(self, writeToFile)
     writer.commitJob()
   }

@@ -201,7 +201,7 @@ object SparkEnv extends Logging {
   }
 
   /**
-    * 创建Driver或者Executor的Env
+    * 通用方法：创建Driver或者Executor的Env
    * Helper method to create a SparkEnv for a driver or an executor.
    */
   private def create(

@@ -124,15 +124,18 @@ private[spark] class Executor(
     */
   startDriverHeartbeater()
 
+  //TODO 启动Task
   def launchTask(
       context: ExecutorBackend,
       taskId: Long,
       attemptNumber: Int,
       taskName: String,
       serializedTask: ByteBuffer) {
+    //TODO 创建TaskRunner对象，把serializedTask封装到TaskRunner
     val tr = new TaskRunner(context, taskId = taskId, attemptNumber = attemptNumber, taskName,
       serializedTask)
     runningTasks.put(taskId, tr)
+    //TODO 把TaskRunner丢到线程池中，调用TaskRunner的start方法，从而最终调用run方法
     threadPool.execute(tr)
   }
 
@@ -176,10 +179,13 @@ private[spark] class Executor(
       }
     }
 
+    //  TODO 执行task的真正业务逻辑
     override def run() {
       val deserializeStartTime = System.currentTimeMillis()
       Thread.currentThread.setContextClassLoader(replClassLoader)
+      //获取序列化器
       val ser = env.closureSerializer.newInstance()
+
       logInfo(s"Running $taskName (TID $taskId)")
       execBackend.statusUpdate(taskId, TaskState.RUNNING, EMPTY_BYTE_BUFFER)
       var taskStart: Long = 0
@@ -188,6 +194,7 @@ private[spark] class Executor(
       try {
         val (taskFiles, taskJars, taskBytes) = Task.deserializeWithDependencies(serializedTask)
         updateDependencies(taskFiles, taskJars)
+        //TODO 反序列化得到task
         task = ser.deserialize[Task[Any]](taskBytes, Thread.currentThread.getContextClassLoader)
 
         // If this task has been killed before we deserialized it, let's quit now. Otherwise,
@@ -206,6 +213,7 @@ private[spark] class Executor(
 
         // Run the actual task and measure its runtime.
         taskStart = System.currentTimeMillis()
+        //TODO 调用task的run方法
         val value = task.run(taskAttemptId = taskId, attemptNumber = attemptNumber)
         val taskFinish = System.currentTimeMillis()
 

@@ -53,11 +53,14 @@ private[spark] class ResultTask[T, U](
 
   override def runTask(context: TaskContext): U = {
     // Deserialize the RDD and the func using the broadcast variables.
+    //得到序列化器
     val ser = SparkEnv.get.closureSerializer.newInstance()
+    //TODO 反序列化Task，可以得到rdd和作用在RDD上的函数
     val (rdd, func) = ser.deserialize[(RDD[T], (TaskContext, Iterator[T]) => U)](
       ByteBuffer.wrap(taskBinary.value), Thread.currentThread.getContextClassLoader)
 
     metrics = Some(context.taskMetrics)
+    //开始调用这个函数
     func(context, rdd.iterator(partition, context))
   }
 
